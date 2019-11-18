@@ -1,6 +1,6 @@
 /* mini_sendmail - accept email on behalf of real sendmail
 **
-** Copyright © 1999 by Jef Poskanzer <jef@mail.acme.com>.
+** Copyright © 1999,2015 by Jef Poskanzer <jef@mail.acme.com>.
 ** All rights reserved.
 **
 ** Redistribution and use in source and binary forms, with or without
@@ -58,12 +58,7 @@
 
 
 /* Defines. */
-#ifndef SMTP_PORT
 #define SMTP_PORT 25
-#endif /* SMTP_PORT */
-#ifndef SMTP_HOST
-#define SMTP_HOST "127.0.0.1"
-#endif /* SMTP_HOST */
 #define DEFAULT_TIMEOUT 60
 
 
@@ -99,6 +94,10 @@ static void sigcatch( int sig );
 static void show_error( char* cause );
 
 
+/* Do overlapping strcpy safely, by using memmove. */
+#define ol_strcpy(dst,src) memmove(dst,src,strlen(src)+1)
+
+
 int
 main( int argc, char** argv )
     {
@@ -118,7 +117,7 @@ main( int argc, char** argv )
     fake_from = (char*) 0;
     parse_message = 0;
 #ifdef DO_MINUS_SP
-    server = SMTP_HOST;
+    server = "127.0.0.1";
     port = SMTP_PORT;
 #endif /* DO_MINUS_SP */
     verbose = 0;
@@ -159,15 +158,12 @@ main( int argc, char** argv )
 	if ( pw == (struct passwd*) 0 )
 	    {
 	    (void) fprintf( stderr, "%s: can't determine username\n", argv0 );
-	    username = "unknown";
+	    exit( 1 );
 	    }
-    else
-        {
-	    username = pw->pw_name;
-        }
+	username = pw->pw_name;
 #else /* DO_GETPWUID */
 	(void) fprintf( stderr, "%s: can't determine username\n", argv0 );
-	username = "unknown";
+	exit( 1 );
 #endif /* DO_GETPWUID */
 	}
 
@@ -184,7 +180,7 @@ main( int argc, char** argv )
 
     /* Strip off any angle brackets in the from address. */
     while ( from[0] == '<' )
-	(void) strcpy( from, &from[1] );
+	(void) ol_strcpy( from, &from[1] );
     while ( from[strlen(from)-1] == '>' )
 	from[strlen(from)-1] = '\0';
 
@@ -300,6 +296,7 @@ usage( void )
 #else /* DO_MINUS_SP */
     char* spflag = "";
 #endif /* DO_MINUS_SP */
+    (void) fprintf( stderr, "%s\n",MINI_SENDMAIL_VERSION);
     (void) fprintf( stderr, "usage:  %s [-f<name>] [-t] %s[-T<timeout>] [-v] [address ...]\n", argv0, spflag );
     exit( 1 );
     }
@@ -356,7 +353,7 @@ make_received( char* from, char* username, char* hostname )
 
     t = time( (time_t*) 0 );
     tmP = localtime( &t );
-    (void) strftime( timestamp, sizeof(timestamp), "%a, %d %b %Y %T %Z", tmP );
+    (void) strftime( timestamp, sizeof(timestamp), "%a, %d %b %Y %H:%M:%S %Z", tmP );
     received_size =
 	500 + strlen( from ) + strlen( hostname ) * 2 + strlen( MINI_SENDMAIL_VERSION ) +
 	strlen( timestamp ) + strlen( username );
@@ -521,7 +518,7 @@ parse_for_recipients( char* message )
 		if ( bcc != (char*) 0 )
 		    {
 		    /* Elide the Bcc: line, and reset cp. */
-		    (void) strcpy( bcc, cp + 1 );
+		    (void) ol_strcpy( bcc, cp + 1 );
 		    cp = bcc - 1;
 		    bcc = (char*) 0;
 		    }
@@ -542,6 +539,8 @@ add_recipient( char* recipient, int len )
     {
     char buf[1000];
     int status;
+    char * srchBracket;
+    int pos=0;
 
     /* Skip leading whitespace. */
     while ( len > 0 && ( *recipient == ' ' || *recipient == '\t' ) )
@@ -549,6 +548,17 @@ add_recipient( char* recipient, int len )
 	++recipient;
 	--len;
 	}
+
+    /* Search for open angle brackets. Remove names before EMail adress 1.3.10 */
+    srchBracket=recipient;
+    while ( pos < len && *srchBracket != '<' ) {
+	pos++;
+	srchBracket++; /* Look next position */
+    }
+    if (pos <= len && *srchBracket == '<') {
+	len-=pos;
+        recipient=srchBracket;
+    }
 
     /* Strip off any angle brackets. */
     while ( len > 0 && *recipient == '<' )
@@ -560,6 +570,7 @@ add_recipient( char* recipient, int len )
 	--len;
 
     (void) snprintf( buf, sizeof(buf), "RCPT TO:<%.*s>", len, recipient );
+
     send_command( buf );
     status = read_response();
     if ( status != 250  && status != 251 )

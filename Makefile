@@ -1,18 +1,14 @@
 # Makefile for mini_sendmail
 
-# Default SMTP host and port
-SMTP_HOST = 127.0.0.1
-SMTP_PORT = 25
-
 # CONFIGURE: If you are using a SystemV-based operating system, such as
 # Solaris, you will need to uncomment this definition.
 #SYSV_LIBS =    -lnsl -lsocket
 
-BINDIR =	/usr/local/sbin
+BINDIR =	/usr/local/bin
 MANDIR =	/usr/local/man
 CC =		cc
-CFLAGS =	-O -D"SMTP_HOST=\"$(SMTP_HOST)\"" -DSMTP_PORT=$(SMTP_PORT) -std=c99 -pedantic -U__STRICT_ANSI__ -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wno-long-long
-LDFLAGS =	-s
+CFLAGS =	-O -ansi -pedantic -U__STRICT_ANSI__ -Wall -Wpointer-arith -Wshadow -Wcast-qual -Wcast-align -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wno-long-long
+LDFLAGS =	-s -static
 LDLIBS =	$(SYSV_LIBS)
 
 CC :=		$(DIET) $(CC)
